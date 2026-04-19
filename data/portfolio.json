@@ -3,14 +3,32 @@
         "ticker": "AAPL",
         "sector": "Technology",
         "asset_class": "Equity",
-        "quantity": 10.0,
-        "purchase_price": 150.0
+        "quantity": 100.0,
+        "purchase_price": 200.0,
+        "purchase_date": "2025-04-22"
     },
     {
         "ticker": "MSFT",
         "sector": "Technology",
         "asset_class": "Equity",
-        "quantity": 200.0,
-        "purchase_price": 120.0
+        "quantity": 120.0,
+        "purchase_price": 377.0,
+        "purchase_date": "2025-03-28"
+    },
+    {
+        "ticker": "ASML",
+        "sector": "Technology",
+        "asset_class": "Equity",
+        "quantity": 100.0,
+        "purchase_price": 1120.0,
+        "purchase_date": "2026-01-19"
+    },
+    {
+        "ticker": "ADYEN.AS",
+        "sector": "Technology",
+        "asset_class": "Equity",
+        "quantity": 50.0,
+        "purchase_price": 1417.0,
+        "purchase_date": "2025-04-30"
     }
 ]

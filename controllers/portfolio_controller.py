@@ -1,13 +1,17 @@
 from models.asset import Asset
 from models.portfolio import Portfolio
-from views.chart_view import plot_price_history, plot_multiple_price_histories
+from views.chart_view import (
+    plot_price_history,
+    plot_multiple_price_histories,
+    plot_simulation_paths,
+)
 from views.table_view import (
     display_assets,
     display_total_values,
-    display_asset_weights,
     display_group_weights,
     display_price_history_table,
     display_calculation_breakdown,
+    display_simulation_results,
 )
 
 
@@ -29,11 +33,12 @@ class PortfolioController:
         asset_class: str,
         quantity: float,
         purchase_price: float,
+        purchase_date: str,
     ) -> None:
         """
         Creates an Asset and adds it to the portfolio.
         """
-        asset = Asset(ticker, sector, asset_class, quantity, purchase_price)
+        asset = Asset(ticker, sector, asset_class, quantity, purchase_price, purchase_date)
         self.portfolio.add_asset(asset)
         self.portfolio.save_to_file(self.filepath)
 
@@ -54,7 +59,9 @@ class PortfolioController:
             print("Invalid input. Quantity and purchase price must be numbers.")
             return
 
-        self.add_asset(ticker, sector, asset_class, quantity, purchase_price)
+        purchase_date = input("Purchase date (YYYY-MM-DD): ").strip()
+
+        self.add_asset(ticker, sector, asset_class, quantity, purchase_price, purchase_date)
         print(f"Asset {ticker} added successfully.\n")
 
     def show_portfolio_summary(self) -> None:
@@ -67,10 +74,11 @@ class PortfolioController:
 
         snapshot = self.portfolio.portfolio_snapshot()
 
-        display_assets(snapshot)
+        display_assets(snapshot, self.portfolio.base_currency)
         display_total_values(
             self.portfolio.total_transaction_value(),
             self.portfolio.total_current_value(),
+            self.portfolio.base_currency,
         )
 
     def run(self) -> None:
@@ -84,9 +92,10 @@ class PortfolioController:
             print("3. Show current and historical price")
             print("4. Plot price graph")
             print("5. Show portfolio calculations")
-            print("6. Exit")
+            print("6. Run 15-year portfolio simulation")
+            print("7. Exit")
 
-            choice = input("Choose an option (1-6): ").strip()
+            choice = input("Choose an option (1-7): ").strip()
 
             if choice == "1":
                 self.add_asset_interactive()
@@ -99,10 +108,12 @@ class PortfolioController:
             elif choice == "5":
                 self.show_portfolio_calculations()
             elif choice == "6":
+                self.run_portfolio_simulation()
+            elif choice == "7":
                 print("Exiting Portfolio Tracker. Goodbye.")
                 break
             else:
-                print("Invalid choice. Please enter 1, 2, 3, 4, 5, or 6.")
+                print("Invalid choice. Please enter 1, 2, 3, 4, 5, 6, or 7.")
     
     def show_current_and_historical_price(self) -> None:
         """
@@ -147,7 +158,7 @@ class PortfolioController:
         if not tickers:
             print("No valid tickers entered.")
             return
-
+        
         if len(tickers) == 1:
             ticker = tickers[0]
             data = self.portfolio.get_historical_prices(ticker, period)
@@ -156,7 +167,8 @@ class PortfolioController:
                 print(f"Could not retrieve historical data for {ticker}.")
                 return
 
-            plot_price_history(data, ticker)
+            currency = self.portfolio.get_asset_currency(ticker)
+            plot_price_history(data, ticker, currency)
             return
 
         price_data_dict = {}
@@ -188,11 +200,12 @@ class PortfolioController:
         sector_weights = self.portfolio.current_weights_by_sector()
         asset_class_weights = self.portfolio.current_weights_by_asset_class()
 
-        display_calculation_breakdown(snapshot)
+        display_calculation_breakdown(snapshot, self.portfolio.base_currency)
 
         display_total_values(
             self.portfolio.total_transaction_value(),
             self.portfolio.total_current_value(),
+            self.portfolio.base_currency,
         )
 
         if sector_weights:
@@ -210,3 +223,33 @@ class PortfolioController:
             )
         else:
             print("No asset class weights available.")
+
+    def run_portfolio_simulation(self) -> None:
+        """
+        Runs a 15-year portfolio simulation with 100,000 GBM paths.
+        """
+        if not self.portfolio.get_assets():
+            print("\nPortfolio is empty.\n")
+            return
+
+        print("\nRunning 15-year portfolio simulation with 100,000 paths...")
+
+        results = self.portfolio.simulate_gbm_portfolio(
+            years=15,
+            n_paths=100_000,
+            steps_per_year=12,
+            historical_period="5y",
+            confidence_level=0.95,
+        )
+
+        if results is None:
+            print("Simulation could not be run. Check whether sufficient price data is available.")
+            return
+
+        display_simulation_results(results, self.portfolio.base_currency)
+        plot_simulation_paths(
+            results["paths"],
+            results["years"],
+            self.portfolio.base_currency,
+            max_paths_to_plot=100,
+        )
