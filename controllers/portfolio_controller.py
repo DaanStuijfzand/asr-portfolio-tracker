@@ -6,6 +6,7 @@ from views.table_view import (
     display_total_values,
     display_asset_weights,
     display_group_weights,
+    display_price_history_table,
 )
 
 
@@ -84,8 +85,8 @@ class PortfolioController:
             print("\n=== Portfolio Tracker Menu ===")
             print("1. Add asset")
             print("2. View portfolio summary")
-            print("3. Show current price")
-            print("4. Plot historical prices")
+            print("3. Show current and historical price")
+            print("4. Plot price graph")
             print("5. Exit")
 
             choice = input("Choose an option (1-5): ").strip()
@@ -95,28 +96,40 @@ class PortfolioController:
             elif choice == "2":
                 self.show_portfolio_summary()
             elif choice == "3":
-                self.show_current_price()
+                self.show_current_and_historical_price()
             elif choice == "4":
-                self.plot_historical_prices()
+                self.plot_price_graph()
             elif choice == "5":
                 print("Exiting Portfolio Tracker. Goodbye.")
                 break
             else:
                 print("Invalid choice. Please enter 1, 2, 3, 4, or 5.")
     
-    def show_current_price(self) -> None:
+    def show_current_and_historical_price(self) -> None:
         """
-        Prompts the user for a ticker and displays its current price.
+        Prompts the user for a ticker and displays both current and historical price data.
         """
         ticker = input("Enter ticker: ").strip().upper()
-        price = self.portfolio.get_current_price(ticker)
+        period = input("Enter period (e.g. 1mo, 6mo, 1y, 5y) [default=1mo]: ").strip()
 
-        if price is None:
+        if not period:
+            period = "1mo"
+
+        current_price = self.portfolio.get_current_price(ticker)
+        historical_data = self.portfolio.get_historical_prices(ticker, period)
+
+        if current_price is None:
             print(f"Could not retrieve current price for {ticker}.")
         else:
-            print(f"Current price of {ticker}: {price:.2f}")
+            print(f"\nCurrent price of {ticker}: {current_price:.2f}\n")
 
-    def plot_historical_prices(self) -> None:
+        if historical_data is None or historical_data.empty:
+            print(f"Could not retrieve historical data for {ticker}.")
+            return
+
+        display_price_history_table(ticker, historical_data)
+
+    def plot_price_graph(self) -> None:
         """
         Prompts the user for a ticker and plots its historical prices.
         """

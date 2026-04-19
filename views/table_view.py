@@ -84,3 +84,34 @@ def display_group_weights(title: str, weights: dict[str, float]) -> None:
         table.add_row(category, f"{weight:.2%}")
 
     console.print(table)
+
+def display_price_history_table(ticker: str, price_data, rows: int = 10) -> None:
+    """
+    Displays recent historical closing prices for a ticker in a table.
+    """
+    if price_data is None or price_data.empty:
+        console.print(f"[bold red]No historical data available for {ticker}.[/bold red]")
+        return
+
+    table = Table(title=f"{ticker} Historical Prices")
+
+    table.add_column("Date", justify="left")
+    table.add_column("Open", justify="right")
+    table.add_column("High", justify="right")
+    table.add_column("Low", justify="right")
+    table.add_column("Close", justify="right")
+    table.add_column("Volume", justify="right")
+
+    recent_data = price_data.tail(rows)
+
+    for date, row in recent_data.iterrows():
+        table.add_row(
+            str(date.date()),
+            f"{row['Open']:.2f}",
+            f"{row['High']:.2f}",
+            f"{row['Low']:.2f}",
+            f"{row['Close']:.2f}",
+            f"{int(row['Volume'])}",
+        )
+
+    console.print(table)
