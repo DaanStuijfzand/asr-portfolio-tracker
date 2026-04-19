@@ -1,22 +1,27 @@
+import json
+from dataclasses import asdict
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import yfinance as yf
-import json
+
 from models.asset import Asset
-from dataclasses import asdict
-from pathlib import Path
 
 
 class Portfolio:
     """
     Represents an investment portfolio containing multiple assets.
-    Handles storage and basic portfolio calculations.
+    Handles storage and portfolio calculations.
     """
 
     def __init__(self, base_currency: str = "USD"):
         self.assets = []
         self.base_currency = base_currency
 
+    # ------------------------------------------------------------------
+    # Basic portfolio storage
+    # ------------------------------------------------------------------
     def add_asset(self, asset: Asset) -> None:
         """
         Adds an Asset object to the portfolio.
@@ -28,7 +33,71 @@ class Portfolio:
         Returns all assets in the portfolio.
         """
         return self.assets
-    
+
+    def save_to_file(self, filepath: str) -> None:
+        """
+        Saves the portfolio assets to a JSON file.
+        """
+        path = Path(filepath)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        data = [asdict(asset) for asset in self.assets]
+
+        with open(path, "w", encoding="utf-8") as file:
+            json.dump(data, file, indent=4)
+
+    def load_from_file(self, filepath: str) -> None:
+        """
+        Loads portfolio assets from a JSON file if it exists.
+        """
+        path = Path(filepath)
+
+        if not path.exists():
+            self.assets = []
+            return
+
+        with open(path, "r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        self.assets = [Asset(**item) for item in data]
+
+    # ------------------------------------------------------------------
+    # Market data helpers
+    # ------------------------------------------------------------------
+    def get_current_price(self, ticker: str) -> float | None:
+        """
+        Fetches the latest closing price for a ticker using yfinance.
+        """
+        try:
+            data = yf.Ticker(ticker).history(period="5d")
+            if data.empty:
+                return None
+            return float(data["Close"].iloc[-1])
+        except Exception:
+            return None
+
+    def get_historical_prices(self, ticker: str, period: str = "1y"):
+        """
+        Fetches historical price data for a ticker using yfinance.
+        """
+        try:
+            data = yf.Ticker(ticker).history(period=period)
+            return data
+        except Exception:
+            return None
+
+    def get_asset_name(self, ticker: str) -> str:
+        """
+        Fetches the human-readable asset name for a ticker using yfinance.
+        Falls back to the ticker if no name is available.
+        """
+        try:
+            ticker_obj = yf.Ticker(ticker)
+            info = ticker_obj.info
+            return info.get("shortName") or info.get("longName") or ticker
+        except Exception:
+            return ticker
+
     def get_asset_currency(self, ticker: str) -> str:
         """
         Fetches the trading currency of an asset ticker.
@@ -41,6 +110,9 @@ class Portfolio:
         except Exception:
             return self.base_currency
 
+    # ------------------------------------------------------------------
+    # FX conversion helpers
+    # ------------------------------------------------------------------
     def get_current_fx_rate(self, from_currency: str, to_currency: str) -> float | None:
         """
         Fetches the latest FX conversion rate from one currency to another.
@@ -74,7 +146,10 @@ class Portfolio:
             end = start + pd.Timedelta(days=7)
 
             fx_ticker = f"{from_currency}{to_currency}=X"
-            data = yf.Ticker(fx_ticker).history(start=start.strftime("%Y-%m-%d"), end=end.strftime("%Y-%m-%d"))
+            data = yf.Ticker(fx_ticker).history(
+                start=start.strftime("%Y-%m-%d"),
+                end=end.strftime("%Y-%m-%d"),
+            )
 
             if data.empty:
                 return None
@@ -110,7 +185,21 @@ class Portfolio:
             return None
 
         return amount * fx_rate
-    
+
+    # ------------------------------------------------------------------
+    # Asset-level valuation helpers
+    # ------------------------------------------------------------------
+    def get_asset_current_value(self, asset: Asset) -> float | None:
+        """
+        Returns the current market value of a single asset position.
+        """
+        current_price = self.get_current_price(asset.ticker)
+
+        if current_price is None:
+            return None
+
+        return current_price * asset.quantity
+
     def get_asset_transaction_value_base(self, asset: Asset) -> float | None:
         """
         Returns the transaction value converted to the portfolio base currency
@@ -144,33 +233,9 @@ class Portfolio:
             self.base_currency,
         )
 
-
-        return self.convert_amount_historical_fx(
-            asset.transaction_value,
-            asset_currency,
-            self.base_currency,
-            asset.purchase_date,
-        )
-
-    def get_asset_current_value_base(self, asset: Asset) -> float | None:
-        """
-        Returns the current market value converted to the portfolio base currency
-        using the latest FX rate.
-        """
-        current_price = self.get_current_price(asset.ticker)
-
-        if current_price is None:
-            return None
-
-        asset_currency = self.get_asset_currency(asset.ticker)
-        current_value_native = current_price * asset.quantity
-
-        return self.convert_amount_current_fx(
-            current_value_native,
-            asset_currency,
-            self.base_currency,
-        )
-
+    # ------------------------------------------------------------------
+    # Portfolio valuation
+    # ------------------------------------------------------------------
     def total_transaction_value(self) -> float:
         """
         Returns the total invested amount in the portfolio base currency,
@@ -185,6 +250,64 @@ class Portfolio:
 
         return total
 
+    def total_current_value(self) -> float:
+        """
+        Returns the total current market value of the portfolio
+        in the base currency.
+        Assets for which no live price or FX rate is available are skipped.
+        """
+        total = 0.0
+
+        for asset in self.assets:
+            current_value = self.get_asset_current_value_base(asset)
+            if current_value is not None:
+                total += current_value
+
+        return total
+
+    def portfolio_snapshot(self) -> list[dict]:
+        """
+        Returns a snapshot of the portfolio including native and base-currency values.
+        """
+        snapshot = []
+        total_current = self.total_current_value()
+
+        for asset in self.assets:
+            asset_currency = self.get_asset_currency(asset.ticker)
+            current_price = self.get_current_price(asset.ticker)
+
+            transaction_value_base = self.get_asset_transaction_value_base(asset)
+            current_value_base = self.get_asset_current_value_base(asset)
+
+            if current_value_base is not None and total_current > 0:
+                asset_weight = current_value_base / total_current
+            else:
+                asset_weight = None
+
+            snapshot.append(
+                {
+                    "ticker": asset.ticker,
+                    "name": self.get_asset_name(asset.ticker),
+                    "sector": asset.sector,
+                    "asset_class": asset.asset_class,
+                    "quantity": asset.quantity,
+                    "purchase_price": asset.purchase_price,
+                    "purchase_date": asset.purchase_date,
+                    "asset_currency": asset_currency,
+                    "transaction_value_native": asset.transaction_value,
+                    "transaction_value_base": transaction_value_base,
+                    "current_price": current_price,
+                    "current_value_native": None if current_price is None else current_price * asset.quantity,
+                    "current_value_base": current_value_base,
+                    "asset_weight": asset_weight,
+                }
+            )
+
+        return snapshot
+
+    # ------------------------------------------------------------------
+    # Weight calculations
+    # ------------------------------------------------------------------
     def asset_weights_by_cost(self) -> list[dict]:
         """
         Returns the relative weight of each asset based on transaction value.
@@ -243,110 +366,6 @@ class Portfolio:
             asset_class: value / total_value
             for asset_class, value in class_totals.items()
         }
-    def get_current_price(self, ticker: str) -> float | None:
-        """
-        Fetches the latest closing price for a ticker using yfinance.
-        """
-        try:
-            data = yf.Ticker(ticker).history(period="5d")
-            if data.empty:
-                return None
-            return float(data["Close"].iloc[-1])
-        except Exception:
-            return None
-        
-    def get_asset_name(self, ticker: str) -> str:
-        """
-        Fetches the human-readable asset name for a ticker using yfinance.
-        Falls back to the ticker if no name is available.
-        """
-        try:
-            ticker_obj = yf.Ticker(ticker)
-            info = ticker_obj.info
-
-            return (
-                info.get("shortName")
-                or info.get("longName")
-                or ticker
-            )
-        except Exception:
-            return ticker
-
-    def get_historical_prices(self, ticker: str, period: str = "1y"):
-        """
-        Fetches historical price data for a ticker using yfinance.
-        """
-        try:
-            data = yf.Ticker(ticker).history(period=period)
-            return data
-        except Exception:
-            return None
-        
-    def get_asset_current_value(self, asset: Asset) -> float | None:
-        """
-        Returns the current market value of a single asset position.
-        """
-        current_price = self.get_current_price(asset.ticker)
-
-        if current_price is None:
-            return None
-
-        return current_price * asset.quantity
-
-    def total_current_value(self) -> float:
-        """
-        Returns the total current market value of the portfolio
-        in the base currency.
-        Assets for which no live price or FX rate is available are skipped.
-        """
-        total = 0.0
-
-        for asset in self.assets:
-            current_value = self.get_asset_current_value_base(asset)
-            if current_value is not None:
-                total += current_value
-
-        return total
-
-    def portfolio_snapshot(self) -> list[dict]:
-        """
-        Returns a snapshot of the portfolio including native and base-currency values.
-        """
-        snapshot = []
-        total_current = self.total_current_value()
-
-        for asset in self.assets:
-            asset_currency = self.get_asset_currency(asset.ticker)
-            current_price = self.get_current_price(asset.ticker)
-
-            transaction_value_base = self.get_asset_transaction_value_base(asset)
-            current_value_base = self.get_asset_current_value_base(asset)
-
-            if current_value_base is not None and total_current > 0:
-                asset_weight = current_value_base / total_current
-            else:
-                asset_weight = None
-
-            snapshot.append(
-                {
-                    "ticker": asset.ticker,
-                    "name": self.get_asset_name(asset.ticker),
-                    "sector": asset.sector,
-                    "asset_class": asset.asset_class,
-                    "quantity": asset.quantity,
-                    "purchase_price": asset.purchase_price,
-                    "purchase_date": asset.purchase_date,
-                    "asset_currency": asset_currency,
-                    "transaction_value_native": asset.transaction_value,
-                    "transaction_value_base": transaction_value_base,
-                    "current_price": current_price,
-                    "current_value_native": None if current_price is None else current_price * asset.quantity,
-                    "current_value_base": current_value_base,
-                    "asset_weight": asset_weight,
-                }
-            )
-
-        return snapshot
 
     def asset_weights_by_current_value(self) -> list[dict]:
         """
@@ -425,34 +444,10 @@ class Portfolio:
             asset_class: value / total_class_value
             for asset_class, value in class_totals.items()
         }
-    
-    def save_to_file(self, filepath: str) -> None:
-        """
-        Saves the portfolio assets to a JSON file.
-        """
-        path = Path(filepath)
-        path.parent.mkdir(parents=True, exist_ok=True)
 
-        data = [asdict(asset) for asset in self.assets]
-
-        with open(path, "w", encoding="utf-8") as file:
-            json.dump(data, file, indent=4)
-
-    def load_from_file(self, filepath: str) -> None:
-        """
-        Loads portfolio assets from a JSON file if it exists.
-        """
-        path = Path(filepath)
-
-        if not path.exists():
-            self.assets = []
-            return
-
-        with open(path, "r", encoding="utf-8") as file:
-            data = json.load(file)
-
-        self.assets = [Asset(**item) for item in data]
-
+    # ------------------------------------------------------------------
+    # Historical return helpers
+    # ------------------------------------------------------------------
     def get_portfolio_weights_vector(self) -> tuple[list[str], np.ndarray]:
         """
         Returns portfolio tickers and their current-value weights as a numpy array.
@@ -494,7 +489,6 @@ class Portfolio:
             if len(monthly_prices) < 2:
                 continue
 
-            # Normalize all indices to the same month-end timestamp format
             monthly_prices.index = monthly_prices.index.tz_localize(None)
             monthly_prices.index = monthly_prices.index.to_period("M").to_timestamp("M")
 
@@ -509,8 +503,6 @@ class Portfolio:
             return None
 
         returns_df = prices_df.pct_change(fill_method=None)
-
-        # Keep rows where at least one ticker has a valid return
         returns_df = returns_df.dropna(how="all")
 
         if returns_df.empty:
@@ -518,51 +510,6 @@ class Portfolio:
 
         return returns_df
 
-    def estimate_portfolio_parameters(self, period: str = "5y") -> tuple[float, float] | tuple[None, None]:
-        """
-        Estimates annualized portfolio drift and volatility from historical monthly returns.
-        Handles missing ticker histories by reweighting available assets each month.
-        """
-        returns_df = self.get_historical_returns_matrix(period)
-        tickers, weights = self.get_portfolio_weights_vector()
-
-        if returns_df is None or returns_df.empty or len(weights) == 0:
-            return None, None
-
-        available_tickers = [ticker for ticker in tickers if ticker in returns_df.columns]
-
-        if not available_tickers:
-            return None, None
-
-        filtered_weights = np.array(
-            [weights[tickers.index(ticker)] for ticker in available_tickers],
-            dtype=float,
-        )
-
-        if filtered_weights.sum() == 0:
-            return None, None
-
-        filtered_weights = filtered_weights / filtered_weights.sum()
-        filtered_returns = returns_df[available_tickers]
-
-        # Weighted returns with dynamic renormalization when some assets are missing
-        weighted_returns = filtered_returns.fillna(0.0).mul(filtered_weights, axis=1).sum(axis=1)
-        active_weights = filtered_returns.notna().mul(filtered_weights, axis=1).sum(axis=1)
-
-        portfolio_monthly_returns = weighted_returns[active_weights > 0] / active_weights[active_weights > 0]
-        portfolio_monthly_returns = portfolio_monthly_returns.dropna()
-
-        if portfolio_monthly_returns.empty:
-            return None, None
-
-        mu_monthly = float(portfolio_monthly_returns.mean())
-        sigma_monthly = float(portfolio_monthly_returns.std())
-
-        mu_annual = mu_monthly * 12
-        sigma_annual = sigma_monthly * np.sqrt(12)
-
-        return mu_annual, sigma_annual
-    
     def get_portfolio_monthly_returns(self, period: str = "5y"):
         """
         Returns historical monthly portfolio returns based on current asset weights.
@@ -601,6 +548,27 @@ class Portfolio:
 
         return portfolio_monthly_returns
 
+    def estimate_portfolio_parameters(self, period: str = "5y") -> tuple[float, float] | tuple[None, None]:
+        """
+        Estimates annualized portfolio drift and volatility from historical monthly returns.
+        Handles missing ticker histories by reweighting available assets each month.
+        """
+        portfolio_monthly_returns = self.get_portfolio_monthly_returns(period)
+
+        if portfolio_monthly_returns is None or portfolio_monthly_returns.empty:
+            return None, None
+
+        mu_monthly = float(portfolio_monthly_returns.mean())
+        sigma_monthly = float(portfolio_monthly_returns.std())
+
+        mu_annual = mu_monthly * 12
+        sigma_annual = sigma_monthly * np.sqrt(12)
+
+        return mu_annual, sigma_annual
+
+    # ------------------------------------------------------------------
+    # Risk and performance metrics
+    # ------------------------------------------------------------------
     def calculate_sharpe_ratio(self, period: str = "5y", risk_free_rate: float = 0.0) -> float | None:
         """
         Calculates the annualized Sharpe Ratio using historical monthly portfolio returns.
@@ -642,6 +610,65 @@ class Portfolio:
 
         return float(drawdowns.min())
 
+    # ------------------------------------------------------------------
+    # Simulation helpers
+    # ------------------------------------------------------------------
+    def get_asset_start_values_base(self) -> tuple[list[str], np.ndarray]:
+        """
+        Returns portfolio tickers and their current base-currency asset values.
+        Only assets with available current values are included.
+        """
+        tickers = []
+        start_values = []
+
+        for asset in self.assets:
+            current_value = self.get_asset_current_value_base(asset)
+
+            if current_value is None:
+                continue
+
+            tickers.append(asset.ticker)
+            start_values.append(current_value)
+
+        if not start_values:
+            return [], np.array([])
+
+        return tickers, np.array(start_values, dtype=float)
+
+    def estimate_multivariate_parameters(self, period: str = "5y"):
+        """
+        Estimates monthly mean returns and covariance matrix for portfolio assets
+        using historical monthly returns.
+        """
+        returns_df = self.get_historical_returns_matrix(period)
+        tickers, start_values = self.get_asset_start_values_base()
+
+        if returns_df is None or returns_df.empty or len(start_values) == 0:
+            return None, None, None
+
+        available_tickers = [ticker for ticker in tickers if ticker in returns_df.columns]
+
+        if not available_tickers:
+            return None, None, None
+
+        filtered_returns = returns_df[available_tickers].dropna()
+
+        if filtered_returns.empty:
+            return None, None, None
+
+        filtered_start_values = np.array(
+            [start_values[tickers.index(ticker)] for ticker in available_tickers],
+            dtype=float,
+        )
+
+        mu_vector = filtered_returns.mean().values
+        cov_matrix = filtered_returns.cov().values
+
+        return available_tickers, filtered_start_values, (mu_vector, cov_matrix)
+
+    # ------------------------------------------------------------------
+    # Simulations
+    # ------------------------------------------------------------------
     def simulate_gbm_portfolio(
         self,
         years: int = 15,
@@ -684,6 +711,7 @@ class Portfolio:
         var_95 = max(0.0, initial_value - var_threshold)
 
         return {
+            "model": "Portfolio-Level GBM Simulation",
             "initial_value": initial_value,
             "mu_annual": mu,
             "sigma_annual": sigma,
@@ -696,4 +724,80 @@ class Portfolio:
             "percentile_95": percentile_95,
             "var_95": var_95,
             "paths": paths,
+        }
+
+    def simulate_correlated_portfolio(
+        self,
+        years: int = 15,
+        n_paths: int = 100_000,
+        steps_per_year: int = 12,
+        historical_period: str = "5y",
+        confidence_level: float = 0.95,
+    ) -> dict | None:
+        """
+        Simulates future portfolio values using correlated multi-asset monthly returns.
+        """
+        tickers, start_values, params = self.estimate_multivariate_parameters(historical_period)
+
+        if tickers is None or start_values is None or params is None:
+            return None
+
+        mu_vector, cov_matrix = params
+
+        if len(start_values) == 0:
+            return None
+
+        n_assets = len(start_values)
+        n_steps = years * steps_per_year
+
+        portfolio_weights = start_values / start_values.sum()
+
+        mu_monthly = float(np.dot(portfolio_weights, mu_vector))
+        sigma_monthly = float(np.sqrt(portfolio_weights @ cov_matrix @ portfolio_weights))
+
+        mu_annual = mu_monthly * 12
+        sigma_annual = sigma_monthly * np.sqrt(12)
+
+        try:
+            simulated_returns = np.random.multivariate_normal(
+                mean=mu_vector,
+                cov=cov_matrix,
+                size=(n_paths, n_steps),
+            )
+        except Exception:
+            return None
+
+        asset_paths = np.zeros((n_paths, n_steps + 1, n_assets), dtype=float)
+        asset_paths[:, 0, :] = start_values
+
+        for t in range(1, n_steps + 1):
+            asset_paths[:, t, :] = asset_paths[:, t - 1, :] * (1 + simulated_returns[:, t - 1, :])
+
+        portfolio_paths = asset_paths.sum(axis=2)
+        ending_values = portfolio_paths[:, -1]
+
+        initial_value = float(start_values.sum())
+        mean_ending_value = float(np.mean(ending_values))
+        median_ending_value = float(np.median(ending_values))
+        percentile_5 = float(np.percentile(ending_values, 5))
+        percentile_95 = float(np.percentile(ending_values, 95))
+
+        var_threshold = float(np.percentile(ending_values, (1 - confidence_level) * 100))
+        var_95 = max(0.0, initial_value - var_threshold)
+
+        return {
+            "model": "Correlated Multi-Asset Simulation",
+            "initial_value": initial_value,
+            "mu_annual": mu_annual,
+            "sigma_annual": sigma_annual,
+            "years": years,
+            "n_paths": n_paths,
+            "steps_per_year": steps_per_year,
+            "mean_ending_value": mean_ending_value,
+            "median_ending_value": median_ending_value,
+            "percentile_5": percentile_5,
+            "percentile_95": percentile_95,
+            "var_95": var_95,
+            "tickers": tickers,
+            "portfolio_paths": portfolio_paths,
         }

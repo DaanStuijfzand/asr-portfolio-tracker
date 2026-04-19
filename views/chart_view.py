@@ -1,7 +1,10 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 
+# ------------------------------------------------------------------
+# Price chart views
+# ------------------------------------------------------------------
 def plot_price_history(price_data, ticker: str, currency: str) -> None:
     """
     Plots historical closing prices for a single ticker.
@@ -53,14 +56,19 @@ def plot_multiple_price_histories(price_series_dict: dict[str, object]) -> None:
     plt.tight_layout()
     plt.show()
 
+
+# ------------------------------------------------------------------
+# Simulation chart views
+# ------------------------------------------------------------------
 def plot_simulation_paths(
     paths: np.ndarray,
     years: int,
     base_currency: str,
+    model_name: str = "Portfolio Simulation",
     max_paths_to_plot: int = 100,
 ) -> None:
     """
-    Plots a subset of 100 simulated portfolio paths in the portfolio base currency.
+    Plots a subset of simulated portfolio paths in the portfolio base currency.
     """
     if paths is None or len(paths) == 0:
         print("No simulation paths available to plot.")
@@ -76,7 +84,7 @@ def plot_simulation_paths(
     for i in range(paths_to_plot):
         plt.plot(time_axis, paths[i], alpha=0.4)
 
-    plt.title(f"Simulated Portfolio Paths ({paths_to_plot} of {n_paths} shown)")
+    plt.title(f"{model_name} ({paths_to_plot} of {n_paths} paths shown)")
     plt.xlabel("Years")
     plt.ylabel(f"Portfolio Value ({base_currency})")
     plt.grid(True)
