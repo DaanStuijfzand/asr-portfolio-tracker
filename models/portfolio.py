@@ -101,6 +101,23 @@ class Portfolio:
             return float(data["Close"].iloc[-1])
         except Exception:
             return None
+        
+    def get_asset_name(self, ticker: str) -> str:
+        """
+        Fetches the human-readable asset name for a ticker using yfinance.
+        Falls back to the ticker if no name is available.
+        """
+        try:
+            ticker_obj = yf.Ticker(ticker)
+            info = ticker_obj.info
+
+            return (
+                info.get("shortName")
+                or info.get("longName")
+                or ticker
+            )
+        except Exception:
+            return ticker
 
     def get_historical_prices(self, ticker: str, period: str = "1y"):
         """
@@ -139,17 +156,25 @@ class Portfolio:
 
     def portfolio_snapshot(self) -> list[dict]:
         """
-        Returns a snapshot of the portfolio including purchase and current values.
+        Returns a snapshot of the portfolio including purchase values,
+        current values, and relative asset weights.
         """
         snapshot = []
+        total_current = self.total_current_value()
 
         for asset in self.assets:
             current_price = self.get_current_price(asset.ticker)
             current_value = None if current_price is None else current_price * asset.quantity
 
+            if current_value is not None and total_current > 0:
+                asset_weight = current_value / total_current
+            else:
+                asset_weight = None
+
             snapshot.append(
                 {
                     "ticker": asset.ticker,
+                    "name": self.get_asset_name(asset.ticker),
                     "sector": asset.sector,
                     "asset_class": asset.asset_class,
                     "quantity": asset.quantity,
@@ -157,6 +182,7 @@ class Portfolio:
                     "transaction_value": asset.transaction_value,
                     "current_price": current_price,
                     "current_value": current_value,
+                    "asset_weight": asset_weight,
                 }
             )
 

@@ -5,5 +5,12 @@
         "asset_class": "Equity",
         "quantity": 10.0,
         "purchase_price": 150.0
+    },
+    {
+        "ticker": "MSFT",
+        "sector": "Technology",
+        "asset_class": "Equity",
+        "quantity": 200.0,
+        "purchase_price": 120.0
     }
 ]

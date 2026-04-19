@@ -7,6 +7,7 @@ from views.table_view import (
     display_asset_weights,
     display_group_weights,
     display_price_history_table,
+    display_calculation_breakdown,
 )
 
 
@@ -71,15 +72,6 @@ class PortfolioController:
             self.portfolio.total_transaction_value(),
             self.portfolio.total_current_value(),
         )
-        display_asset_weights(self.portfolio.asset_weights_by_current_value())
-        display_group_weights(
-            "Weights by Sector (Current Value)",
-            self.portfolio.current_weights_by_sector(),
-        )
-        display_group_weights(
-            "Weights by Asset Class (Current Value)",
-            self.portfolio.current_weights_by_asset_class(),
-        )
 
     def run(self) -> None:
         """
@@ -91,9 +83,10 @@ class PortfolioController:
             print("2. View portfolio summary")
             print("3. Show current and historical price")
             print("4. Plot price graph")
-            print("5. Exit")
+            print("5. Show portfolio calculations")
+            print("6. Exit")
 
-            choice = input("Choose an option (1-5): ").strip()
+            choice = input("Choose an option (1-6): ").strip()
 
             if choice == "1":
                 self.add_asset_interactive()
@@ -104,10 +97,12 @@ class PortfolioController:
             elif choice == "4":
                 self.plot_price_graph()
             elif choice == "5":
+                self.show_portfolio_calculations()
+            elif choice == "6":
                 print("Exiting Portfolio Tracker. Goodbye.")
                 break
             else:
-                print("Invalid choice. Please enter 1, 2, 3, 4, or 5.")
+                print("Invalid choice. Please enter 1, 2, 3, 4, 5, or 6.")
     
     def show_current_and_historical_price(self) -> None:
         """
@@ -179,3 +174,39 @@ class PortfolioController:
             return
 
         plot_multiple_price_histories(price_data_dict)
+    
+    def show_portfolio_calculations(self) -> None:
+        """
+        Displays how total transaction value and total current value are obtained,
+        along with the relative weights by sector and asset class.
+        """
+        if not self.portfolio.get_assets():
+            print("\nPortfolio is empty.\n")
+            return
+
+        snapshot = self.portfolio.portfolio_snapshot()
+        sector_weights = self.portfolio.current_weights_by_sector()
+        asset_class_weights = self.portfolio.current_weights_by_asset_class()
+
+        display_calculation_breakdown(snapshot)
+
+        display_total_values(
+            self.portfolio.total_transaction_value(),
+            self.portfolio.total_current_value(),
+        )
+
+        if sector_weights:
+            display_group_weights(
+                "Weights by Sector (Current Value)",
+                sector_weights,
+            )
+        else:
+            print("No sector weights available.")
+
+        if asset_class_weights:
+            display_group_weights(
+                "Weights by Asset Class (Current Value)",
+                asset_class_weights,
+            )
+        else:
+            print("No asset class weights available.")

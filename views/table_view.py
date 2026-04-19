@@ -12,6 +12,7 @@ def display_assets(assets: list[dict]) -> None:
     table = Table(title="Portfolio Assets")
 
     table.add_column("Ticker", justify="left")
+    table.add_column("Name", justify="left")
     table.add_column("Sector", justify="left")
     table.add_column("Asset Class", justify="left")
     table.add_column("Quantity", justify="right")
@@ -34,6 +35,7 @@ def display_assets(assets: list[dict]) -> None:
 
         table.add_row(
             asset["ticker"],
+            asset["name"],
             asset["sector"],
             asset["asset_class"],
             f"{asset['quantity']:.2f}",
@@ -112,6 +114,52 @@ def display_price_history_table(ticker: str, price_data, rows: int = 10) -> None
             f"{row['Low']:.2f}",
             f"{row['Close']:.2f}",
             f"{int(row['Volume'])}",
+        )
+
+    console.print(table)
+
+def display_calculation_breakdown(assets: list[dict]) -> None:
+    """
+    Displays the per-asset calculation breakdown used to obtain
+    total transaction value and total current value.
+    """
+    table = Table(title="Portfolio Calculation Breakdown")
+
+    table.add_column("Ticker", justify="left")
+    table.add_column("Name", justify="left")
+    table.add_column("Quantity", justify="right")
+    table.add_column("Purchase Price", justify="right")
+    table.add_column("Transaction Value", justify="right")
+    table.add_column("Current Price", justify="right")
+    table.add_column("Current Value", justify="right")
+    table.add_column("Asset Weight (Current Value)", justify="right")
+
+    for asset in assets:
+        current_price = (
+            f"{asset['current_price']:.2f}"
+            if asset["current_price"] is not None
+            else "N/A"
+        )
+        current_value = (
+            f"{asset['current_value']:.2f}"
+            if asset["current_value"] is not None
+            else "N/A"
+        )
+        asset_weight = (
+            f"{asset['asset_weight']:.2%}"
+            if asset["asset_weight"] is not None
+            else "N/A"
+        )
+
+        table.add_row(
+            asset["ticker"],
+            asset["name"],
+            f"{asset['quantity']:.2f}",
+            f"{asset['purchase_price']:.2f}",
+            f"{asset['transaction_value']:.2f}",
+            current_price,
+            current_value,
+            asset_weight,
         )
 
     console.print(table)
