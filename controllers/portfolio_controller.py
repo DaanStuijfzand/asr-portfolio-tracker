@@ -12,6 +12,7 @@ from views.table_view import (
     display_price_history_table,
     display_calculation_breakdown,
     display_simulation_results,
+    display_additional_metrics,
 )
 
 
@@ -199,6 +200,8 @@ class PortfolioController:
         snapshot = self.portfolio.portfolio_snapshot()
         sector_weights = self.portfolio.current_weights_by_sector()
         asset_class_weights = self.portfolio.current_weights_by_asset_class()
+        sharpe_ratio = self.portfolio.calculate_sharpe_ratio()
+        max_drawdown = self.portfolio.calculate_max_drawdown()
 
         display_calculation_breakdown(snapshot, self.portfolio.base_currency)
 
@@ -223,6 +226,8 @@ class PortfolioController:
             )
         else:
             print("No asset class weights available.")
+        
+        display_additional_metrics(sharpe_ratio, max_drawdown)
 
     def run_portfolio_simulation(self) -> None:
         """

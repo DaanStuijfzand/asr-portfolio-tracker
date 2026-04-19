@@ -212,3 +212,20 @@ def display_simulation_results(results: dict, base_currency: str) -> None:
     table.add_row("VaR (95%)", f"{results['var_95']:.2f} {base_currency}")
 
     console.print(table)
+
+def display_additional_metrics(sharpe_ratio: float | None, max_drawdown: float | None) -> None:
+    """
+    Displays additional portfolio risk and performance metrics.
+    """
+    table = Table(title="Additional Portfolio Metrics")
+
+    table.add_column("Metric", justify="left")
+    table.add_column("Value", justify="right")
+
+    sharpe_display = f"{sharpe_ratio:.4f}" if sharpe_ratio is not None else "N/A"
+    max_drawdown_display = f"{max_drawdown:.2%}" if max_drawdown is not None else "N/A"
+
+    table.add_row("Sharpe Ratio", sharpe_display)
+    table.add_row("Maximum Drawdown", max_drawdown_display)
+
+    console.print(table)

@@ -562,6 +562,85 @@ class Portfolio:
         sigma_annual = sigma_monthly * np.sqrt(12)
 
         return mu_annual, sigma_annual
+    
+    def get_portfolio_monthly_returns(self, period: str = "5y"):
+        """
+        Returns historical monthly portfolio returns based on current asset weights.
+        Handles missing asset histories by dynamically reweighting available assets.
+        """
+        returns_df = self.get_historical_returns_matrix(period)
+        tickers, weights = self.get_portfolio_weights_vector()
+
+        if returns_df is None or returns_df.empty or len(weights) == 0:
+            return None
+
+        available_tickers = [ticker for ticker in tickers if ticker in returns_df.columns]
+
+        if not available_tickers:
+            return None
+
+        filtered_weights = np.array(
+            [weights[tickers.index(ticker)] for ticker in available_tickers],
+            dtype=float,
+        )
+
+        if filtered_weights.sum() == 0:
+            return None
+
+        filtered_weights = filtered_weights / filtered_weights.sum()
+        filtered_returns = returns_df[available_tickers]
+
+        weighted_returns = filtered_returns.fillna(0.0).mul(filtered_weights, axis=1).sum(axis=1)
+        active_weights = filtered_returns.notna().mul(filtered_weights, axis=1).sum(axis=1)
+
+        portfolio_monthly_returns = weighted_returns[active_weights > 0] / active_weights[active_weights > 0]
+        portfolio_monthly_returns = portfolio_monthly_returns.dropna()
+
+        if portfolio_monthly_returns.empty:
+            return None
+
+        return portfolio_monthly_returns
+
+    def calculate_sharpe_ratio(self, period: str = "5y", risk_free_rate: float = 0.0) -> float | None:
+        """
+        Calculates the annualized Sharpe Ratio using historical monthly portfolio returns.
+        Assumes a constant annual risk-free rate.
+        """
+        portfolio_monthly_returns = self.get_portfolio_monthly_returns(period)
+
+        if portfolio_monthly_returns is None or portfolio_monthly_returns.empty:
+            return None
+
+        monthly_rf = risk_free_rate / 12
+        excess_returns = portfolio_monthly_returns - monthly_rf
+
+        volatility = excess_returns.std()
+
+        if volatility == 0 or np.isnan(volatility):
+            return None
+
+        sharpe_monthly = excess_returns.mean() / volatility
+        sharpe_annual = sharpe_monthly * np.sqrt(12)
+
+        return float(sharpe_annual)
+
+    def calculate_max_drawdown(self, period: str = "5y") -> float | None:
+        """
+        Calculates the maximum drawdown from historical monthly portfolio returns.
+        """
+        portfolio_monthly_returns = self.get_portfolio_monthly_returns(period)
+
+        if portfolio_monthly_returns is None or portfolio_monthly_returns.empty:
+            return None
+
+        cumulative = (1 + portfolio_monthly_returns).cumprod()
+        running_max = cumulative.cummax()
+        drawdowns = (cumulative - running_max) / running_max
+
+        if drawdowns.empty:
+            return None
+
+        return float(drawdowns.min())
 
     def simulate_gbm_portfolio(
         self,
