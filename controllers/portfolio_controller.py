@@ -17,6 +17,9 @@ class PortfolioController:
 
     def __init__(self):
         self.portfolio = Portfolio()
+        self.filepath = "data/portfolio.json"
+        self.portfolio.load_from_file(self.filepath)
+        print(f"Loaded {len(self.portfolio.get_assets())} assets from file.")
 
     def add_asset(
         self,
@@ -31,6 +34,7 @@ class PortfolioController:
         """
         asset = Asset(ticker, sector, asset_class, quantity, purchase_price)
         self.portfolio.add_asset(asset)
+        self.portfolio.save_to_file(self.filepath)
 
     def add_asset_interactive(self) -> None:
         """

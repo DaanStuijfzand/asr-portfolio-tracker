@@ -1,0 +1,9 @@
+[
+    {
+        "ticker": "AAPL",
+        "sector": "Technology",
+        "asset_class": "Equity",
+        "quantity": 10.0,
+        "purchase_price": 150.0
+    }
+]

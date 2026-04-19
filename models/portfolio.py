@@ -1,5 +1,8 @@
 from models.asset import Asset
 import yfinance as yf
+import json
+from dataclasses import asdict
+from pathlib import Path
 
 
 class Portfolio:
@@ -232,3 +235,30 @@ class Portfolio:
             asset_class: value / total_value
             for asset_class, value in class_totals.items()
         }
+    
+    def save_to_file(self, filepath: str) -> None:
+        """
+        Saves the portfolio assets to a JSON file.
+        """
+        path = Path(filepath)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        data = [asdict(asset) for asset in self.assets]
+
+        with open(path, "w", encoding="utf-8") as file:
+            json.dump(data, file, indent=4)
+
+    def load_from_file(self, filepath: str) -> None:
+        """
+        Loads portfolio assets from a JSON file if it exists.
+        """
+        path = Path(filepath)
+
+        if not path.exists():
+            self.assets = []
+            return
+
+        with open(path, "r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        self.assets = [Asset(**item) for item in data]
