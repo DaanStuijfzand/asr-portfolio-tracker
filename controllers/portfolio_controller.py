@@ -1,8 +1,9 @@
 from models.asset import Asset
 from models.portfolio import Portfolio
+from views.chart_view import plot_price_history
 from views.table_view import (
     display_assets,
-    display_total_value,
+    display_total_values,
     display_asset_weights,
     display_group_weights,
 )
@@ -30,12 +31,105 @@ class PortfolioController:
         asset = Asset(ticker, sector, asset_class, quantity, purchase_price)
         self.portfolio.add_asset(asset)
 
+    def add_asset_interactive(self) -> None:
+        """
+        Prompts the user for asset details and adds the asset to the portfolio.
+        """
+        print("\nAdd a new asset")
+
+        ticker = input("Ticker: ").strip().upper()
+        sector = input("Sector: ").strip()
+        asset_class = input("Asset class: ").strip()
+
+        try:
+            quantity = float(input("Quantity: ").strip())
+            purchase_price = float(input("Purchase price: ").strip())
+        except ValueError:
+            print("Invalid input. Quantity and purchase price must be numbers.")
+            return
+
+        self.add_asset(ticker, sector, asset_class, quantity, purchase_price)
+        print(f"Asset {ticker} added successfully.\n")
+
     def show_portfolio_summary(self) -> None:
         """
         Displays the current portfolio summary.
         """
-        display_assets(self.portfolio.get_assets())
-        display_total_value(self.portfolio.total_transaction_value())
-        display_asset_weights(self.portfolio.asset_weights_by_cost())
-        display_group_weights("Weights by Sector", self.portfolio.weights_by_sector())
-        display_group_weights("Weights by Asset Class", self.portfolio.weights_by_asset_class())
+        if not self.portfolio.get_assets():
+            print("\nPortfolio is empty.\n")
+            return
+
+        snapshot = self.portfolio.portfolio_snapshot()
+
+        display_assets(snapshot)
+        display_total_values(
+            self.portfolio.total_transaction_value(),
+            self.portfolio.total_current_value(),
+        )
+        display_asset_weights(self.portfolio.asset_weights_by_current_value())
+        display_group_weights(
+            "Weights by Sector (Current Value)",
+            self.portfolio.current_weights_by_sector(),
+        )
+        display_group_weights(
+            "Weights by Asset Class (Current Value)",
+            self.portfolio.current_weights_by_asset_class(),
+        )
+
+    def run(self) -> None:
+        """
+        Runs the main CLI loop.
+        """
+        while True:
+            print("\n=== Portfolio Tracker Menu ===")
+            print("1. Add asset")
+            print("2. View portfolio summary")
+            print("3. Show current price")
+            print("4. Plot historical prices")
+            print("5. Exit")
+
+            choice = input("Choose an option (1-5): ").strip()
+
+            if choice == "1":
+                self.add_asset_interactive()
+            elif choice == "2":
+                self.show_portfolio_summary()
+            elif choice == "3":
+                self.show_current_price()
+            elif choice == "4":
+                self.plot_historical_prices()
+            elif choice == "5":
+                print("Exiting Portfolio Tracker. Goodbye.")
+                break
+            else:
+                print("Invalid choice. Please enter 1, 2, 3, 4, or 5.")
+    
+    def show_current_price(self) -> None:
+        """
+        Prompts the user for a ticker and displays its current price.
+        """
+        ticker = input("Enter ticker: ").strip().upper()
+        price = self.portfolio.get_current_price(ticker)
+
+        if price is None:
+            print(f"Could not retrieve current price for {ticker}.")
+        else:
+            print(f"Current price of {ticker}: {price:.2f}")
+
+    def plot_historical_prices(self) -> None:
+        """
+        Prompts the user for a ticker and plots its historical prices.
+        """
+        ticker = input("Enter ticker: ").strip().upper()
+        period = input("Enter period (e.g. 1mo, 6mo, 1y, 5y) [default=1y]: ").strip()
+
+        if not period:
+            period = "1y"
+
+        data = self.portfolio.get_historical_prices(ticker, period)
+
+        if data is None or data.empty:
+            print(f"Could not retrieve historical data for {ticker}.")
+            return
+
+        plot_price_history(data, ticker)
