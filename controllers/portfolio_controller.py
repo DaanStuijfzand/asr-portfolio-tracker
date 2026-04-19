@@ -1,6 +1,6 @@
 from models.asset import Asset
 from models.portfolio import Portfolio
-from views.chart_view import plot_price_history
+from views.chart_view import plot_price_history, plot_multiple_price_histories
 from views.table_view import (
     display_assets,
     display_total_values,
@@ -131,18 +131,47 @@ class PortfolioController:
 
     def plot_price_graph(self) -> None:
         """
-        Prompts the user for a ticker and plots its historical prices.
+        Prompts the user for one or more tickers and plots historical prices.
+        Users can enter a single ticker or multiple tickers separated by commas.
         """
-        ticker = input("Enter ticker: ").strip().upper()
+        ticker_input = input(
+            "Enter ticker(s) separated by commas (e.g. AAPL or AAPL,MSFT,JNJ): "
+        ).strip().upper()
+
         period = input("Enter period (e.g. 1mo, 6mo, 1y, 5y) [default=1y]: ").strip()
 
         if not period:
             period = "1y"
 
-        data = self.portfolio.get_historical_prices(ticker, period)
+        tickers = [ticker.strip() for ticker in ticker_input.split(",") if ticker.strip()]
 
-        if data is None or data.empty:
-            print(f"Could not retrieve historical data for {ticker}.")
+        if not tickers:
+            print("No valid tickers entered.")
             return
 
-        plot_price_history(data, ticker)
+        if len(tickers) == 1:
+            ticker = tickers[0]
+            data = self.portfolio.get_historical_prices(ticker, period)
+
+            if data is None or data.empty:
+                print(f"Could not retrieve historical data for {ticker}.")
+                return
+
+            plot_price_history(data, ticker)
+            return
+
+        price_data_dict = {}
+
+        for ticker in tickers:
+            data = self.portfolio.get_historical_prices(ticker, period)
+
+            if data is None or data.empty:
+                print(f"Warning: could not retrieve historical data for {ticker}.")
+            else:
+                price_data_dict[ticker] = data
+
+        if not price_data_dict:
+            print("Could not retrieve historical data for any of the selected tickers.")
+            return
+
+        plot_multiple_price_histories(price_data_dict)
