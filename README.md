@@ -4,10 +4,11 @@
 This project is a command-line portfolio tracker built in Python using an MVC architecture.
 
 The application allows users to:
-- add assets to a portfolio
+- add and delete assets from a portfolio
 - inspect current and historical market prices
 - visualize price series
 - view portfolio summaries and portfolio calculations
+- change the portfolio base currency during a session
 - run 15-year portfolio simulations with 100,000 Monte Carlo paths
 
 The project was developed by Daan Stuijfzand for the a.s.r. Vermogensbeheer Portfolio Tracker assignment.
@@ -20,11 +21,15 @@ The project was developed by Daan Stuijfzand for the a.s.r. Vermogensbeheer Port
   - quantity
   - purchase price
   - purchase date
+- Delete assets from the portfolio through the CLI
+- Change the portfolio base currency during the session
 - Automatic JSON save/load of the portfolio
 - Show current and historical price data for a ticker
 - Plot price graphs for:
   - a single ticker
   - multiple tickers
+  - raw price graphs
+  - normalized performance graphs
 - View portfolio summary including:
   - asset name
   - sector
@@ -43,7 +48,7 @@ The project was developed by Daan Stuijfzand for the a.s.r. Vermogensbeheer Port
 - Run a 15-year portfolio simulation with 100,000 simulated paths using:
   - portfolio-level Geometric Brownian Motion (GBM)
   - correlated multi-asset simulation
-- Display simulation summary statistics and simulation path graphs
+- Display simulation summary statistics, simulation path graphs, and a histogram of ending portfolio values
 - Base currency support with FX conversion:
   - historical FX conversion for transaction values based on purchase date
   - current FX conversion for current values
@@ -107,23 +112,29 @@ python3 main.py
 ```
 
 ## Menu Options
-1. Add asset  
-2. View portfolio summary  
-3. Show current and historical price  
-4. Plot price graph  
-5. Show portfolio calculations  
-6. Run 15-year portfolio simulation  
-7. Exit  
+1. Add asset
+2. Delete asset
+3. Change base currency
+4. View portfolio summary
+5. Show current and historical price
+6. Plot price graph
+7. Show portfolio calculations
+8. Run 15-year portfolio simulation
+9. Exit
 
-When selecting option 6, the user can choose between:
+When selecting the price graph option, the user can choose between:
+1. **Raw price graph**
+2. **Normalized performance graph**
+
+When selecting the simulation option, the user can choose between:
 1. **Portfolio-level GBM**
 2. **Correlated multi-asset simulation**
 
 ## Currency Handling
-The portfolio uses a **base currency**, which is currently set to **USD** by default.
+The portfolio uses a **base currency**, which is set to **USD** by default at application startup.
 
 - Asset prices are retrieved in their native trading currency
-- Transaction values are converted to the base currency using a historical FX rate at the purchase date
+- Transaction values are converted to the base currency using a historical FX rate around the purchase date
 - Current values are converted to the base currency using the latest FX rate
 
 This allows the application to handle mixed-currency portfolios more realistically than simply summing raw native prices.
@@ -151,6 +162,7 @@ Both simulation models display:
 - 95th percentile ending value
 - VaR (95%)
 - simulation path graph
+- histogram of ending portfolio values
 
 ## Additional Metrics
 The application also calculates:
@@ -161,9 +173,11 @@ These are shown in the portfolio calculations view.
 
 ## Assumptions and Limitations
 - Purchase price is assumed to be entered in the asset’s native trading currency
-- Historical FX conversion uses a small window around the purchase date and takes the first available FX close in a small window around the purchase date
-- Price graphs show native asset prices, not normalized returns
-- Multi-ticker price graphs may include assets quoted in different currencies
+- Historical FX conversion uses a small window around the purchase date and takes the first available FX close in that window
+- The selected base currency is session-based and resets to the default value when the application restarts
+- Raw price graphs show native asset prices, not normalized returns
+- Normalized performance graphs rebase price series to a common starting value for comparison
+- Multi-ticker raw price graphs may include assets quoted in different currencies
 - The simulations are based on historical monthly returns and simplified distributional assumptions
 - The GBM model is a simplification of real-world market dynamics
 
