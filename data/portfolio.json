@@ -16,14 +16,6 @@
         "purchase_date": "2025-03-28"
     },
     {
-        "ticker": "ASML",
-        "sector": "Technology",
-        "asset_class": "Equity",
-        "quantity": 100.0,
-        "purchase_price": 1120.0,
-        "purchase_date": "2026-01-19"
-    },
-    {
         "ticker": "ADYEN.AS",
         "sector": "Technology",
         "asset_class": "Equity",

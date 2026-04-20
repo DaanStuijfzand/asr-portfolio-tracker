@@ -56,6 +56,44 @@ def plot_multiple_price_histories(price_series_dict: dict[str, object]) -> None:
     plt.tight_layout()
     plt.show()
 
+def plot_normalized_price_histories(price_series_dict: dict[str, object]) -> None:
+    """
+    Plots normalized price histories for multiple tickers,
+    rebased to 100 at the start of the selected period.
+    """
+    if not price_series_dict:
+        print("No price data available to plot.")
+        return
+
+    plt.figure(figsize=(10, 5))
+
+    plotted_any = False
+
+    for ticker, price_data in price_series_dict.items():
+        if price_data is None or price_data.empty:
+            continue
+
+        close_series = price_data["Close"].dropna()
+
+        if close_series.empty:
+            continue
+
+        normalized_series = (close_series / close_series.iloc[0]) * 100
+        plt.plot(normalized_series.index, normalized_series, label=ticker)
+        plotted_any = True
+
+    if not plotted_any:
+        print("No valid historical data available for the selected tickers.")
+        return
+
+    plt.title("Normalized Historical Performance (Base = 100)")
+    plt.xlabel("Date")
+    plt.ylabel("Normalized Value")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
 
 # ------------------------------------------------------------------
 # Simulation chart views
@@ -87,6 +125,28 @@ def plot_simulation_paths(
     plt.title(f"{model_name} ({paths_to_plot} of {n_paths} paths shown)")
     plt.xlabel("Years")
     plt.ylabel(f"Portfolio Value ({base_currency})")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+def plot_simulation_histogram(
+    ending_values: np.ndarray,
+    base_currency: str,
+    model_name: str = "Portfolio Simulation",
+    bins: int = 50,
+) -> None:
+    """
+    Plots a histogram of simulated ending portfolio values.
+    """
+    if ending_values is None or len(ending_values) == 0:
+        print("No simulated ending values available to plot.")
+        return
+
+    plt.figure(figsize=(10, 5))
+    plt.hist(ending_values, bins=bins, alpha=0.8)
+    plt.title(f"{model_name} Ending Value Distribution")
+    plt.xlabel(f"Ending Portfolio Value ({base_currency})")
+    plt.ylabel("Frequency")
     plt.grid(True)
     plt.tight_layout()
     plt.show()

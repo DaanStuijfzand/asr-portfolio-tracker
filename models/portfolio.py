@@ -27,12 +27,28 @@ class Portfolio:
         Adds an Asset object to the portfolio.
         """
         self.assets.append(asset)
+    
+    def remove_asset_by_index(self, index: int) -> bool:
+        """
+        Removes an asset from the portfolio by index.
+        Returns True if successful, otherwise False.
+        """
+        if 0 <= index < len(self.assets):
+            del self.assets[index]
+            return True
+        return False
 
     def get_assets(self) -> list[Asset]:
         """
         Returns all assets in the portfolio.
         """
         return self.assets
+    
+    def set_base_currency(self, base_currency: str) -> None:
+        """
+        Sets the portfolio base currency.
+        """
+        self.base_currency = base_currency.strip().upper()
 
     def save_to_file(self, filepath: str) -> None:
         """

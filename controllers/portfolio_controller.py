@@ -2,7 +2,9 @@ from models.asset import Asset
 from models.portfolio import Portfolio
 from views.chart_view import (
     plot_multiple_price_histories,
+    plot_normalized_price_histories,
     plot_price_history,
+    plot_simulation_histogram,
     plot_simulation_paths,
 )
 from views.table_view import (
@@ -66,6 +68,51 @@ class PortfolioController:
 
         self.add_asset(ticker, sector, asset_class, quantity, purchase_price, purchase_date)
         print(f"Asset {ticker} added successfully.\n")
+    
+    def delete_asset_interactive(self) -> None:
+        """
+        Displays all assets and lets the user delete one by index.
+        """
+        assets = self.portfolio.get_assets()
+
+        if not assets:
+            print("\nPortfolio is empty.\n")
+            return
+
+        print("\nCurrent portfolio assets:")
+        for i, asset in enumerate(assets, start=1):
+            print(
+                f"{i}. {asset.ticker} | {asset.sector} | {asset.asset_class} | "
+                f"Qty: {asset.quantity} | Purchase Price: {asset.purchase_price}"
+            )
+
+        choice = input("\nEnter the number of the asset to delete: ").strip()
+
+        try:
+            asset_index = int(choice) - 1
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+            return
+
+        if self.portfolio.remove_asset_by_index(asset_index):
+            self.portfolio.save_to_file(self.filepath)
+            print("Asset deleted successfully.\n")
+        else:
+            print("Invalid selection. No asset was deleted.\n")
+        
+    def change_base_currency_interactive(self) -> None:
+        """
+        Prompts the user to change the portfolio base currency.
+        """
+        print(f"\nCurrent base currency: {self.portfolio.base_currency}")
+        new_currency = input("Enter new base currency (e.g. USD, EUR): ").strip().upper()
+
+        if not new_currency:
+            print("No currency entered. Base currency unchanged.\n")
+            return
+
+        self.portfolio.set_base_currency(new_currency)
+        print(f"Base currency changed to {self.portfolio.base_currency}.\n")
 
     # ------------------------------------------------------------------
     # Portfolio views
@@ -157,8 +204,8 @@ class PortfolioController:
 
     def plot_price_graph(self) -> None:
         """
-        Prompts the user for one or more tickers and plots historical prices.
-        Users can enter a single ticker or multiple tickers separated by commas.
+        Prompts the user for one or more tickers and plots either raw prices
+        or normalized performance.
         """
         ticker_input = input(
             "Enter ticker(s) separated by commas (e.g. AAPL or AAPL,MSFT,JNJ): "
@@ -169,39 +216,66 @@ class PortfolioController:
         if not period:
             period = "1y"
 
+        print("\nChoose graph type:")
+        print("1. Raw price graph")
+        print("2. Normalized performance graph")
+
+        graph_choice = input("Choose an option (1-2): ").strip()
+
         tickers = [ticker.strip() for ticker in ticker_input.split(",") if ticker.strip()]
 
         if not tickers:
             print("No valid tickers entered.")
             return
 
-        if len(tickers) == 1:
-            ticker = tickers[0]
-            data = self.portfolio.get_historical_prices(ticker, period)
+        if graph_choice == "1":
+            if len(tickers) == 1:
+                ticker = tickers[0]
+                data = self.portfolio.get_historical_prices(ticker, period)
 
-            if data is None or data.empty:
-                print(f"Could not retrieve historical data for {ticker}.")
+                if data is None or data.empty:
+                    print(f"Could not retrieve historical data for {ticker}.")
+                    return
+
+                currency = self.portfolio.get_asset_currency(ticker)
+                plot_price_history(data, ticker, currency)
                 return
 
-            currency = self.portfolio.get_asset_currency(ticker)
-            plot_price_history(data, ticker, currency)
-            return
+            price_data_dict = {}
 
-        price_data_dict = {}
+            for ticker in tickers:
+                data = self.portfolio.get_historical_prices(ticker, period)
 
-        for ticker in tickers:
-            data = self.portfolio.get_historical_prices(ticker, period)
+                if data is None or data.empty:
+                    print(f"Warning: could not retrieve historical data for {ticker}.")
+                else:
+                    price_data_dict[ticker] = data
 
-            if data is None or data.empty:
-                print(f"Warning: could not retrieve historical data for {ticker}.")
-            else:
-                price_data_dict[ticker] = data
+            if not price_data_dict:
+                print("Could not retrieve historical data for any of the selected tickers.")
+                return
 
-        if not price_data_dict:
-            print("Could not retrieve historical data for any of the selected tickers.")
-            return
+            plot_multiple_price_histories(price_data_dict)
 
-        plot_multiple_price_histories(price_data_dict)
+        elif graph_choice == "2":
+            price_data_dict = {}
+
+            for ticker in tickers:
+                data = self.portfolio.get_historical_prices(ticker, period)
+
+                if data is None or data.empty:
+                    print(f"Warning: could not retrieve historical data for {ticker}.")
+                else:
+                    price_data_dict[ticker] = data
+
+            if not price_data_dict:
+                print("Could not retrieve historical data for any of the selected tickers.")
+                return
+
+            plot_normalized_price_histories(price_data_dict)
+
+        else:
+            print("Invalid graph type choice.")
 
     # ------------------------------------------------------------------
     # Simulation
@@ -261,6 +335,13 @@ class PortfolioController:
             max_paths_to_plot=100,
         )
 
+        plot_simulation_histogram(
+            paths_to_plot[:, -1],
+            self.portfolio.base_currency,
+            model_name=results.get("model", "Portfolio Simulation"),
+            bins=50,
+        )
+
     # ------------------------------------------------------------------
     # Main CLI loop
     # ------------------------------------------------------------------
@@ -269,31 +350,36 @@ class PortfolioController:
         Runs the main CLI loop.
         """
         while True:
-            print("\n=== Portfolio Tracker Menu ===")
             print("1. Add asset")
-            print("2. View portfolio summary")
-            print("3. Show current and historical price")
-            print("4. Plot price graph")
-            print("5. Show portfolio calculations")
-            print("6. Run 15-year portfolio simulation")
-            print("7. Exit")
+            print("2. Delete asset")
+            print("3. Change base currency")
+            print("4. View portfolio summary")
+            print("5. Show current and historical price")
+            print("6. Plot price graph")
+            print("7. Show portfolio calculations")
+            print("8. Run 15-year portfolio simulation")
+            print("9. Exit")
 
-            choice = input("Choose an option (1-7): ").strip()
+            choice = input("Choose an option (1-9): ").strip()
 
             if choice == "1":
                 self.add_asset_interactive()
             elif choice == "2":
-                self.show_portfolio_summary()
+                self.delete_asset_interactive()
             elif choice == "3":
-                self.show_current_and_historical_price()
+                self.change_base_currency_interactive()
             elif choice == "4":
-                self.plot_price_graph()
+                self.show_portfolio_summary()
             elif choice == "5":
-                self.show_portfolio_calculations()
+                self.show_current_and_historical_price()
             elif choice == "6":
-                self.run_portfolio_simulation()
+                self.plot_price_graph()
             elif choice == "7":
+                self.show_portfolio_calculations()
+            elif choice == "8":
+                self.run_portfolio_simulation()
+            elif choice == "9":
                 print("Exiting Portfolio Tracker. Goodbye.")
                 break
             else:
-                print("Invalid choice. Please enter 1, 2, 3, 4, 5, 6, or 7.")
+                print("Invalid choice. Please enter 1, 2, 3, 4, 5, 6, 7, 8, or 9.")
